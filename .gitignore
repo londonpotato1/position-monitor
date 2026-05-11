@@ -1,0 +1,41 @@
+# Build output
+build/bin/
+frontend/dist/
+frontend/wailsjs/
+
+# Dependencies
+node_modules/
+frontend/package.json.md5
+
+# Local config (user-supplied keys / settings)
+.env
+.env.*
+!.env.example
+config.yaml
+
+# Data files
+data/
+*.db
+
+# Secrets / credentials
+*.pem
+*.key
+*.json.key
+credentials*.json
+
+# Build artifacts (legacy paths)
+position_manager
+position-monitor
+*.app
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+.omc/
+
+# Internal planning (do not publish)
+PLAN_*.md
+PLAN_*.html
+AGENT_WORKFLOW.md
+CLAUDE.md

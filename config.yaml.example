@@ -1,0 +1,37 @@
+# Position Monitor — exchange enable/disable.
+# Copy this file to `config.yaml` and toggle exchanges you want to monitor.
+# API keys are read from `.env` (see `.env.example`).
+
+# Korean exchanges (spot only)
+upbit:
+  enabled: false
+bithumb:
+  enabled: false
+
+# Overseas exchanges (spot + futures)
+exchanges:
+  binance:
+    enabled: false
+  bybit:
+    enabled: false
+  okx:
+    enabled: false
+  gate:
+    enabled: false
+  bitget:
+    enabled: false
+  kucoin:
+    enabled: false
+  mexc:
+    enabled: false
+  htx:
+    enabled: false
+  hyperliquid:
+    enabled: false
+  lighter:
+    enabled: false
+
+# UI refresh
+position:
+  refresh_interval: 5         # seconds between auto-refresh
+  hide_small_threshold: 1.0   # hide unmatched positions worth less than $1
