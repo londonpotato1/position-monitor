@@ -1,6 +1,6 @@
-# Position Monitor
+# Position Monitor (English)
 
-> English | [🇰🇷 한국어](README_KO.md)
+> [🇰🇷 한국어](README.md) | English
 
 > Multi-exchange hedge position monitor with portfolio dashboard.
 > **Read-only.** Does not place orders.
