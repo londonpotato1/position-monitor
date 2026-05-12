@@ -69,20 +69,22 @@ wails dev
 - Read positions
 - Read tickers / orderbooks
 
-`.env` is a plain key=value file at the project root. Some exchanges have alternate variable names — set the primary name and the app auto-aliases the rest:
+`.env` is a plain key=value file at the project root. **Variable names must use the `_API_KEY` / `_API_SECRET` form** (e.g. `BINANCE_API_KEY=...`).
 
-| You set | Auto-aliased to |
-|---------|-----------------|
-| `BINANCE_SECRET` | `BINANCE_API_SECRET` |
-| `BYBIT_SECRET` | `BYBIT_API_SECRET` |
-| `OKX_SECRET` | `OKX_API_SECRET` |
-| `HTX_SECRET` | `HTX_API_SECRET` |
-| `UPBIT_SECRET` | `UPBIT_API_SECRET` |
-| `BITHUMB_SECRET` | `BITHUMB_API_SECRET` |
-| `GATE_API_SECRET` | `GATE_SECRET` |
-| `HYPERLIQUID_API_KEY` | `HYPERLIQUID_WALLET_ADDRESS` |
-| `HYPERLIQUID_SECRET` | `HYPERLIQUID_PRIVATE_KEY` |
-| `LIGHTER_SECRET` | `LIGHTER_PRIVATE_KEY` |
+```bash
+BINANCE_API_KEY=your_read_only_key
+BINANCE_API_SECRET=your_read_only_secret
+
+BYBIT_API_KEY=...
+BYBIT_API_SECRET=...
+# ... same pattern for every exchange
+```
+
+DEX exchanges use special formats:
+- `HYPERLIQUID_WALLET_ADDRESS` + `HYPERLIQUID_PRIVATE_KEY`
+- `LIGHTER_ACCOUNT_INDEX` + `LIGHTER_PRIVATE_KEY` + `LIGHTER_API_KEY_INDEX`
+
+**Backward-compat aliases**: shorter forms like `BINANCE_SECRET` auto-alias to `_API_SECRET` (for users coming from internal bots). The `_KEY` side has no aliases — **always use `_API_KEY` explicitly**.
 
 See [`.env.example`](.env.example) for the full list.
 

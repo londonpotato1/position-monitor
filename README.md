@@ -71,22 +71,24 @@ wails dev
 
 ### .env 파일
 
-프로젝트 루트의 `.env` 는 평문 `key=value` 파일. 거래소마다 변수명 변형이 있어서, 주된 이름 하나만 적으면 앱이 자동으로 별칭 적용:
+프로젝트 루트의 `.env` 는 평문 `key=value` 파일. **변수명은 반드시 `_API_KEY` / `_API_SECRET` 형태로** 적어야 합니다 (예: `BINANCE_API_KEY=...`).
 
-| 사용자가 적는 이름 | 자동으로 같이 set 되는 이름 |
-|--------------------|-----------------------------|
-| `BINANCE_SECRET` | `BINANCE_API_SECRET` |
-| `BYBIT_SECRET` | `BYBIT_API_SECRET` |
-| `OKX_SECRET` | `OKX_API_SECRET` |
-| `HTX_SECRET` | `HTX_API_SECRET` |
-| `UPBIT_SECRET` | `UPBIT_API_SECRET` |
-| `BITHUMB_SECRET` | `BITHUMB_API_SECRET` |
-| `GATE_API_SECRET` | `GATE_SECRET` |
-| `HYPERLIQUID_API_KEY` | `HYPERLIQUID_WALLET_ADDRESS` |
-| `HYPERLIQUID_SECRET` | `HYPERLIQUID_PRIVATE_KEY` |
-| `LIGHTER_SECRET` | `LIGHTER_PRIVATE_KEY` |
+```bash
+BINANCE_API_KEY=your_read_only_key
+BINANCE_API_SECRET=your_read_only_secret
 
-전체 목록은 [`.env.example`](.env.example) 참조.
+BYBIT_API_KEY=...
+BYBIT_API_SECRET=...
+# ... 모든 거래소 동일 패턴
+```
+
+DEX 는 별도 형식:
+- `HYPERLIQUID_WALLET_ADDRESS` + `HYPERLIQUID_PRIVATE_KEY`
+- `LIGHTER_ACCOUNT_INDEX` + `LIGHTER_PRIVATE_KEY` + `LIGHTER_API_KEY_INDEX`
+
+**하위 호환 자동 별칭**: 짧은 형태 (`BINANCE_SECRET` 등) 으로 적어도 자동으로 `_API_SECRET` 으로 매핑됨 (사내 봇 사용자 대상). 단 `_KEY` 측은 매핑 없으므로 **반드시 `_API_KEY` 명시 권장**.
+
+전체 변수명 목록은 [`.env.example`](.env.example) 참조.
 
 ### 🔒 보안 권장 사항
 
