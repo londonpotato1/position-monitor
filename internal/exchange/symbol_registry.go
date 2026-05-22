@@ -36,6 +36,7 @@ var FuturesRegistry = map[string]map[string]FuturesMapping{
 		"TST":   {FuturesBase: "TSTBSC", ScaleFactor: 1},
 		"PUMP":  {FuturesBase: "PUMPFUN", ScaleFactor: 1},
 		"NEIRO": {FuturesBase: "NEIROCTO", ScaleFactor: 1},
+		"AI":    {FuturesBase: "AIGENSYN", ScaleFactor: 1}, // OKX 현물 AI(Gensyn) ↔ Bybit 선물 AIGENSYN
 		// 1000x 토큰
 		"SHIB":  {FuturesBase: "SHIB1000", ScaleFactor: 1000},
 		"PEPE":  {FuturesBase: "1000PEPE", ScaleFactor: 1000},
