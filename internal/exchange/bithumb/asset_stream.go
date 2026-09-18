@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	wsPrivateURL   = "wss://ws-api.bithumb.com/websocket/v1/private"
+	wsPrivateURL   = "wss://ws-api.bithumb.com/websocket/v2/private"
 	wsInitialDelay = 1 * time.Second
 	wsMaxDelay     = 30 * time.Second
 )
@@ -78,10 +78,11 @@ func (s *AssetStream) runLoop(ctx context.Context) {
 
 // connectAndServe WS 연결 → 구독 → 읽기 루프
 func (s *AssetStream) connectAndServe(ctx context.Context) error {
-	// JWT 인증 헤더 생성 (WS용: access_key + nonce 만 포함)
+	// JWT 인증 헤더 생성 (WS용: access_key + nonce + timestamp)
 	token := s.client.generateJWT(map[string]interface{}{
 		"access_key": s.client.apiKey,
 		"nonce":      uuid.New().String(),
+		"timestamp":  time.Now().UnixMilli(),
 	})
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+token)
