@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -48,7 +47,14 @@ func (s *AssetStream) runLoop(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := s.connectAndServe(ctx); err != nil {
+		start := time.Now()
+		err := s.connectAndServe(ctx)
+		// 최대 백오프(30초)보다 오래 유지된 세션 = 정상 연결이었음 → 백오프 초기화.
+		// 즉시 실패(인증 거부 등)는 초기화하지 않아 재시도 폭주를 막는다.
+		if time.Since(start) > 30*time.Second {
+			backoff = time.Second
+		}
+		if err != nil {
 			logger.Warnf("[Upbit AssetStream] disconnected: %v — reconnect in %v", err, backoff)
 			select {
 			case <-ctx.Done():
@@ -59,9 +65,7 @@ func (s *AssetStream) runLoop(ctx context.Context) {
 			if backoff > 30*time.Second {
 				backoff = 30 * time.Second
 			}
-			continue
 		}
-		backoff = time.Second // clean disconnect: reset backoff
 	}
 }
 
@@ -85,9 +89,13 @@ func (s *AssetStream) connectAndServe(ctx context.Context) error {
 		return fmt.Errorf("WS 연결 실패: %w", err)
 	}
 
-	// ctx 취소 시 conn 강제 종료 → ReadMessage 블록 해제
+	// 연결 수명: 함수 반환(stopPing) 또는 앱 ctx 취소 시 아래 고루틴들 종료
+	pingCtx, stopPing := context.WithCancel(ctx)
+	defer stopPing()
+
+	// 연결 수명 종료 시 conn 강제 종료 → ReadMessage 블록 해제
 	go func() {
-		<-ctx.Done()
+		<-pingCtx.Done()
 		conn.Close()
 	}()
 	defer conn.Close()
@@ -104,8 +112,31 @@ func (s *AssetStream) connectAndServe(ctx context.Context) error {
 
 	logger.Info("[Upbit AssetStream] 연결됨 — 실시간 잔고 수신 시작")
 
+	// keepalive: 유휴 시 서버가 약 120초에 연결을 끊으므로 30초마다 ping 전송.
+	// 구독 이후 write는 ping뿐이라 write 직렬화 불필요.
+	go func() {
+		ticker := time.NewTicker(upbitPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-pingCtx.Done():
+				return
+			case <-ticker.C:
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	// 잔고 이벤트는 장시간 없을 수 있어 pong 수신으로도 read deadline 갱신.
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(upbitReadDeadline))
+	})
+
 	// 수신 루프
 	for {
+		conn.SetReadDeadline(time.Now().Add(upbitReadDeadline))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			// ctx 취소에 의한 종료인지 확인
@@ -127,12 +158,13 @@ func (s *AssetStream) connectAndServe(ctx context.Context) error {
 }
 
 // assetEvent 업비트 myAsset WS 이벤트
+// balance/locked는 따옴표 없는 숫자(Double)로 오므로 json.Number로 받는다.
 type assetEvent struct {
 	Type   string `json:"type"`
 	Assets []struct {
-		Currency string `json:"currency"`
-		Balance  string `json:"balance"`
-		Locked   string `json:"locked"`
+		Currency string      `json:"currency"`
+		Balance  json.Number `json:"balance"`
+		Locked   json.Number `json:"locked"`
 	} `json:"assets"`
 }
 
@@ -149,12 +181,12 @@ func parseAssetEvent(data []byte) (map[string]*exchange.Balance, error) {
 
 	balances := make(map[string]*exchange.Balance, len(event.Assets))
 	for _, a := range event.Assets {
-		free, err := strconv.ParseFloat(a.Balance, 64)
+		free, err := a.Balance.Float64()
 		if err != nil {
 			logger.Warnf("[Upbit AssetStream] balance 파싱 실패 currency=%s: %v", a.Currency, err)
 			free = 0
 		}
-		locked, err := strconv.ParseFloat(a.Locked, 64)
+		locked, err := a.Locked.Float64()
 		if err != nil {
 			logger.Warnf("[Upbit AssetStream] locked 파싱 실패 currency=%s: %v", a.Currency, err)
 			locked = 0
