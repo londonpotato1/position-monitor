@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -493,12 +494,13 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 	}
 
 	var result []struct {
-		Symbol           string `json:"symbol"`
-		PositionAmt      string `json:"positionAmt"`
-		EntryPrice       string `json:"entryPrice"`
-		MarkPrice        string `json:"markPrice"`
-		UnRealizedProfit string `json:"unRealizedProfit"`
-		Leverage         string `json:"leverage"`
+		Symbol           string          `json:"symbol"`
+		PositionAmt      string          `json:"positionAmt"`
+		EntryPrice       string          `json:"entryPrice"`
+		MarkPrice        string          `json:"markPrice"`
+		LiquidationPrice json.RawMessage `json:"liquidationPrice"`
+		UnRealizedProfit string          `json:"unRealizedProfit"`
+		Leverage         string          `json:"leverage"`
 	}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
@@ -515,6 +517,14 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 		unrealizedPL, _ := strconv.ParseFloat(p.UnRealizedProfit, 64)
 		leverage, _ := strconv.Atoi(p.Leverage)
 
+		var liquidationPrice *float64
+		var rawLiquidation string
+		if json.Unmarshal(p.LiquidationPrice, &rawLiquidation) == nil {
+			if price, err := strconv.ParseFloat(rawLiquidation, 64); err == nil && price > 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
+				liquidationPrice = &price
+			}
+		}
+
 		side := "long"
 		if size < 0 {
 			side = "short"
@@ -522,13 +532,14 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 		}
 
 		positions = append(positions, &exchange.Position{
-			Symbol:       p.Symbol,
-			Side:         side,
-			Size:         size,
-			EntryPrice:   entryPrice,
-			MarkPrice:    markPrice,
-			UnrealizedPL: unrealizedPL,
-			Leverage:     leverage,
+			Symbol:           p.Symbol,
+			Side:             side,
+			Size:             size,
+			EntryPrice:       entryPrice,
+			MarkPrice:        markPrice,
+			LiquidationPrice: liquidationPrice,
+			UnrealizedPL:     unrealizedPL,
+			Leverage:         leverage,
 		})
 	}
 	return positions, nil

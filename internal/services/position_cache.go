@@ -29,15 +29,17 @@ var stablecoins = map[string]bool{
 
 // HedgedPositionLeg 헷지 포지션의 한쪽 다리
 type HedgedPositionLeg struct {
-	Exchange   string  `json:"exchange"`
-	MarketType string  `json:"marketType"`
-	Symbol     string  `json:"symbol"`
-	Side       string  `json:"side"`
-	Size       float64 `json:"size"`
-	EntryPrice float64 `json:"entryPrice"`
-	MarkPrice  float64 `json:"markPrice"`
-	PnL        float64 `json:"pnl"`
-	Leverage   int     `json:"leverage"`
+	Exchange         string   `json:"exchange"`
+	MarketType       string   `json:"marketType"`
+	Symbol           string   `json:"symbol"`
+	Side             string   `json:"side"`
+	Size             float64  `json:"size"`
+	EntryPrice       float64  `json:"entryPrice"`
+	MarkPrice        float64  `json:"markPrice"`
+	LiquidationPrice *float64 `json:"liquidationPrice,omitempty"`
+	PriceScaleFactor float64  `json:"priceScaleFactor,omitempty"`
+	PnL              float64  `json:"pnl"`
+	Leverage         int      `json:"leverage"`
 }
 
 // HedgedPositionPair 매칭된 헷지 포지션 쌍
@@ -589,15 +591,17 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 						Size:       matchedSize * fe.factor,
 					},
 					FuturesLeg: &HedgedPositionLeg{
-						Exchange:   fe.pos.exchange,
-						MarketType: "futures",
-						Symbol:     fe.pos.position.Symbol,
-						Side:       fe.pos.position.Side,
-						Size:       matchedSize,
-						EntryPrice: fe.pos.position.EntryPrice,
-						MarkPrice:  fe.pos.position.MarkPrice,
-						PnL:        fe.pos.position.UnrealizedPL * (matchedSize / fe.pos.position.Size),
-						Leverage:   fe.pos.position.Leverage,
+						Exchange:         fe.pos.exchange,
+						MarketType:       "futures",
+						Symbol:           fe.pos.position.Symbol,
+						Side:             fe.pos.position.Side,
+						Size:             matchedSize,
+						EntryPrice:       fe.pos.position.EntryPrice,
+						MarkPrice:        fe.pos.position.MarkPrice,
+						LiquidationPrice: fe.pos.position.LiquidationPrice,
+						PriceScaleFactor: fe.factor,
+						PnL:              fe.pos.position.UnrealizedPL * (matchedSize / fe.pos.position.Size),
+						Leverage:         fe.pos.position.Leverage,
 					},
 					MatchedSize: matchedSize,
 					Direction:   direction,

@@ -59,13 +59,14 @@ type Balance struct {
 
 // Position 선물 포지션
 type Position struct {
-	Symbol       string
-	Side         string  // long, short
-	Size         float64 // 수량
-	EntryPrice   float64 // 진입가
-	MarkPrice    float64 // 현재가
-	UnrealizedPL float64 // 미실현 손익
-	Leverage     int     // 레버리지
+	Symbol           string
+	Side             string   // long, short
+	Size             float64  // 수량
+	EntryPrice       float64  // 진입가
+	MarkPrice        float64  // 현재가
+	LiquidationPrice *float64 // 거래소 제공 청산가 (미제공 시 nil)
+	UnrealizedPL     float64  // 미실현 손익
+	Leverage         int      // 레버리지
 }
 
 // DomesticExchange 국내 거래소 인터페이스 (업비트/빗썸)

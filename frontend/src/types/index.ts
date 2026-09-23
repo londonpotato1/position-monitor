@@ -11,6 +11,8 @@ export interface HedgedPositionLeg {
   size: number
   entryPrice: number
   markPrice: number
+  liquidationPrice?: number | null
+  priceScaleFactor?: number
   pnl: number
   leverage: number
 }

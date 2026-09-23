@@ -7,6 +7,7 @@ import type { HedgedPositionPair } from '../types'
 import { usePositionStore } from '../stores/positionStore'
 import { getExchangeColor } from './ExchangeBadge'
 import PnLDisplay from './PnLDisplay'
+import { positionNotional, totalPositionNotional, formatNotional, formatPositionPrice } from './positionDisplay'
 
 const SMALL_QTY_THRESHOLD = 1.0
 const EXEMPT_COINS = new Set(['BTC', 'ETH'])
@@ -62,6 +63,7 @@ export default function HedgePairTable({ pairs }: Props) {
     return a.pairId.localeCompare(b.pairId)
   })
 
+  const totalNotional = totalPositionNotional(sfPairs)
   const totalPnl = sfPairs.reduce((sum, p) => sum + (p.futuresPnl ?? 0), 0)
 
   const handleRefresh = async () => {
@@ -74,7 +76,7 @@ export default function HedgePairTable({ pairs }: Props) {
     <section className="mb-4">
       {/* 헤더 */}
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded-t text-xs"
+        className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-t text-xs"
         style={{ backgroundColor: '#161b22', borderBottom: '1px solid #30363d' }}
       >
         <span className="font-semibold" style={{ color: '#e6edf3' }}>
@@ -106,8 +108,12 @@ export default function HedgePairTable({ pairs }: Props) {
         </button>
 
         {/* 선물 PnL */}
-        <span className="ml-auto mr-2 font-mono text-xs" style={{ color: '#768390' }}>
+        <span className="ml-auto mr-2 font-mono text-xs whitespace-nowrap" style={{ color: '#768390' }}>
           선물 PnL: <PnLDisplay value={totalPnl} />
+        </span>
+
+        <span className="mr-2 font-mono text-xs whitespace-nowrap" style={{ color: '#adbac7' }}>
+          포지션 규모: {formatNotional(totalNotional)} USDT
         </span>
       </div>
 
@@ -121,7 +127,7 @@ export default function HedgePairTable({ pairs }: Props) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-b" style={{ border: '1px solid #30363d', borderTop: 'none' }}>
-          <table className="w-full text-xs" style={{ backgroundColor: '#0d1117' }}>
+          <table className="w-full text-xs whitespace-nowrap" style={{ backgroundColor: '#0d1117' }}>
             <thead>
               <tr style={{ backgroundColor: '#161b22', color: '#768390' }}>
                 {([
@@ -133,17 +139,23 @@ export default function HedgePairTable({ pairs }: Props) {
                   ['matchedSize', '매칭수량', 'text-right'],
                   ['pnl', '선물PnL', 'text-right'],
                 ] as [SortKey, string, string][]).map(([key, label, align]) => (
-                  <th
-                    key={key}
-                    className={`px-3 py-2 ${align} font-medium cursor-pointer select-none hover:text-white transition-colors`}
-                    onClick={() => handleSort(key)}
-                  >
-                    {label}
-                    {sortKey === key && (
-                      <span className="ml-0.5 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                  <React.Fragment key={key}>
+                    <th
+                      className={`px-3 py-2 ${align} font-medium cursor-pointer select-none hover:text-white transition-colors`}
+                      onClick={() => handleSort(key)}
+                    >
+                      {label}
+                      {sortKey === key && (
+                        <span className="ml-0.5 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </th>
+                    {key === 'coin' && (
+                      <th className="px-3 py-2 text-right font-medium whitespace-nowrap">현재가(마크, USDT)</th>
                     )}
-                  </th>
+                  </React.Fragment>
                 ))}
+                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">포지션 규모 (USDT)</th>
+                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">청산가 (USDT)</th>
               </tr>
             </thead>
             <tbody>
@@ -162,6 +174,9 @@ export default function HedgePairTable({ pairs }: Props) {
                   >
                     <td className="px-3 py-2 font-semibold" style={{ color: '#e6edf3' }}>
                       {p.coin}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono whitespace-nowrap" style={{ color: '#adbac7' }}>
+                      {formatPositionPrice(leg2, 'markPrice')}
                     </td>
                     <td className="px-3 py-2">
                       <span style={{ color: getExchangeColor(leg1?.exchange ?? ''), fontWeight: 600 }}>
@@ -184,6 +199,12 @@ export default function HedgePairTable({ pairs }: Props) {
                     </td>
                     <td className="px-3 py-2 text-right">
                       <PnLDisplay value={p.futuresPnl ?? 0} />
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono whitespace-nowrap" style={{ color: '#adbac7' }}>
+                      {formatNotional(positionNotional(leg2))}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono whitespace-nowrap" style={{ color: '#adbac7' }}>
+                      {formatPositionPrice(leg2, 'liquidationPrice')}
                     </td>
                   </tr>
                 )
