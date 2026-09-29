@@ -24,7 +24,6 @@ data/
 credentials*.json
 
 # Build artifacts (legacy paths)
-position_manager
 position-monitor
 *.app
 
