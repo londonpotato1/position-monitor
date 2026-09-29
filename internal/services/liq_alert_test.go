@@ -690,16 +690,17 @@ func TestLiqAlertInvalidData(t *testing.T) {
 		mark, entry       float64
 		liq               *float64
 		wantRise, wantLiq bool
+		watch             string
 	}{
-		{"mark 0", 0, 10, fp(100), false, false},
-		{"mark NaN", math.NaN(), 10, fp(100), false, false},
-		{"mark Inf", math.Inf(1), 10, fp(100), false, false},
-		{"liq below mark (도달/초과 = 최심 단계)", 90, 90, fp(80), false, true},
-		{"liq NaN", 90, 90, fp(math.NaN()), false, false},
-		{"liq 0", 90, 90, fp(0), false, false},
-		{"liq negative", 90, 90, fp(-5), false, false},
-		{"entry 0", 95, 0, fp(100), false, true},
-		{"liq nil, rise works", 13, 10, nil, true, false},
+		{"mark 0", 0, 10, fp(100), false, false, "데이터 오류"},
+		{"mark NaN", math.NaN(), 10, fp(100), false, false, "데이터 오류"},
+		{"mark Inf", math.Inf(1), 10, fp(100), false, false, "데이터 오류"},
+		{"liq below mark (도달/초과 = 최심 단계)", 90, 90, fp(80), false, true, "ok"},
+		{"liq NaN", 90, 90, fp(math.NaN()), false, false, "데이터 오류"},
+		{"liq 0", 90, 90, fp(0), false, false, "데이터 오류"},
+		{"liq negative", 90, 90, fp(-5), false, false, "데이터 오류"},
+		{"entry 0", 95, 0, fp(100), false, true, "데이터 오류"},
+		{"liq nil, rise works", 13, 10, nil, true, false, "청산가 없음"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -712,8 +713,11 @@ func TestLiqAlertInvalidData(t *testing.T) {
 			if strings.Contains(m, "상승 +") != c.wantRise || (strings.Contains(m, "청산 근접") || strings.Contains(m, "[추정 청산가 도달/초과]")) != c.wantLiq {
 				t.Fatalf("rise=%v liq=%v, got:\n%s", c.wantRise, c.wantLiq, m)
 			}
-			if c.liq == nil && (!strings.Contains(m, "청산가 없음") || h.s.Status().Keys[0].Watch != "청산가 없음") {
-				t.Fatalf("liq nil → 청산가 없음 in start message and status: %s", m)
+			if w := h.s.Status().Keys[0].Watch; w != c.watch {
+				t.Fatalf("watch: want %q, got %q", c.watch, w)
+			}
+			if c.liq == nil && !strings.Contains(m, "청산가 없음") {
+				t.Fatalf("liq nil → 청산가 없음 in start message: %s", m)
 			}
 		})
 	}
@@ -889,20 +893,20 @@ func TestLiqAlertUrgentCopies(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func(h *liqHarness) // 시작 메시지 발송 후 (두 키 모두 단계 밖) 적용; sfPair 는 entry=mark (상승 0%)
-		want  int
+		want  int                 // 리터럴 10: liqUrgentCopies 상수 변경도 검출
 		has   []string
 	}{
 		{"30% tier once", func(h *liqHarness) { h.snap.Pairs[0] = sfPair("bybit", "AUSDT", 25) }, 1, []string{"≤30%"}},
-		{"15% tier x10", func(h *liqHarness) { h.snap.Pairs[0] = sfPair("bybit", "AUSDT", 12) }, liqUrgentCopies, []string{"≤15%"}},
-		{"5% tier x10", func(h *liqHarness) { h.snap.Pairs[0] = sfPair("bybit", "AUSDT", 4.9) }, liqUrgentCopies, []string{"≤5%"}},
+		{"15% tier x10", func(h *liqHarness) { h.snap.Pairs[0] = sfPair("bybit", "AUSDT", 12) }, 10, []string{"≤15%"}},
+		{"5% tier x10", func(h *liqHarness) { h.snap.Pairs[0] = sfPair("bybit", "AUSDT", 4.9) }, 10, []string{"≤5%"}},
 		{"rise +20% outside urgent tiers x10", func(h *liqHarness) {
 			leg := h.snap.Pairs[0].FuturesLeg
 			leg.EntryPrice = leg.MarkPrice / 1.21
-		}, liqUrgentCopies, []string{"[상승 +20%]"}},
+		}, 10, []string{"[상승 +20%]"}},
 		{"mixed non-urgent + urgent packed x10", func(h *liqHarness) {
 			h.snap.Pairs[0] = sfPair("bybit", "AUSDT", 25)
 			h.snap.Pairs[1] = sfPair("bybit", "BUSDT", 12)
-		}, liqUrgentCopies, []string{"≤30%", "≤15%"}},
+		}, 10, []string{"≤30%", "≤15%"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1090,5 +1094,152 @@ func TestLiqAlertBeyondSendFailureRetries(t *testing.T) {
 	h.tick(5 * time.Second)
 	if n := h.newSent(&seen); n != 0 {
 		t.Fatalf("no resend after the retried success: %d", n)
+	}
+}
+
+// 5% 단계에서 이탈 구간 (≤ 5+2%p) 안의 6.5% 로 이동 → 단계 유지, 2분 반복은 "≤5%" (raw 15% 단계가 아님).
+func TestLiqAlertRepeatInExitBandKeepsTier(t *testing.T) {
+	h := newLiqTest(t)
+	h.on("bybit", "BTCUSDT")
+	h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "BTCUSDT", 4.9)}
+	var seen int
+	h.tick(0)
+	h.newSent(&seen)
+	setDist(&h.snap.Pairs[0], 6.5)
+	h.tick(2 * time.Minute)
+	if n := h.newSent(&seen); n != liqUrgentCopies || !strings.Contains(h.last(), "[청산 근접 ≤5%]") || strings.Contains(h.last(), "≤15%") {
+		t.Fatalf("repeat inside the exit band must stay the 5%% tier: %d %q", n, h.last())
+	}
+}
+
+// 상승 재무장 (발송 없음) 도 DB 에 저장 → 재시작 후 +20% 재도달 시 다시 알림.
+func TestLiqAlertRiseRearmPersists(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "liq_alerts.db")
+	pair := sfPair("gate", "DOGE_USDT", 0)
+	leg := pair.FuturesLeg
+	leg.MarkPrice, leg.EntryPrice, leg.LiquidationPrice = 12.1, 10, nil // +21%, 청산 단계 없음
+	h := newLiqHarness(t, path)
+	h.on("gate", "DOGE_USDT")
+	h.snap.Pairs = []HedgedPositionPair{pair}
+	h.tick(0)
+	if !strings.Contains(h.last(), "[상승 +20%]") {
+		t.Fatalf("setup +20%%: %q", h.sent)
+	}
+	leg.MarkPrice = 11.4 // +14% < 20−5 → 재무장
+	h.tick(5 * time.Second)
+	h.s.Close()
+
+	h2 := newLiqHarness(t, path)
+	h2.snap.Pairs = []HedgedPositionPair{pair}
+	leg.MarkPrice = 12.1
+	h2.tick(0)
+	if !strings.Contains(h2.last(), "[상승 +20%]") {
+		t.Fatalf("re-armed level must survive restart → +20%% again: %q", h2.sent)
+	}
+}
+
+// OFF 는 메모리 단계 상태 삭제 → 다시 ON 하면 (반복 없는 50% 단계라도) 현재 단계 즉시 재알림.
+func TestLiqAlertOffOnRealertsCurrentTier(t *testing.T) {
+	h := newLiqTest(t)
+	h.on("bybit", "BTCUSDT")
+	h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "BTCUSDT", 49.5)}
+	var seen int
+	h.tick(0)
+	if n := h.newSent(&seen); n != 1 || !strings.Contains(h.last(), "≤50%") {
+		t.Fatalf("setup ≤50%%: %d %q", n, h.sent)
+	}
+	if err := h.s.SetEnabled("bybit", "BTCUSDT", false); err != nil {
+		t.Fatal(err)
+	}
+	h.on("bybit", "BTCUSDT")
+	h.tick(5 * time.Second)
+	if n := h.newSent(&seen); n != 1 || !strings.Contains(h.last(), "[청산 근접 ≤50%]") {
+		t.Fatalf("OFF→ON must re-alert the current tier: %d %q", n, h.sent)
+	}
+}
+
+// 분할 판정은 구분자 + 꼬리말까지 센다 (≤ 4096 포함). A+구분자+B+구분자+꼬리말 = 4097자 → 2건, 4096자 → 1건.
+func TestLiqAlertSplitCountsFooter(t *testing.T) {
+	for _, c := range []struct{ total, parts int }{{4097, 2}, {4096, 1}} {
+		t.Run(fmt.Sprintf("total%d", c.total), func(t *testing.T) {
+			h := newLiqTest(t)
+			h.on("bybit", "AUSDT")
+			h.on("bybit", "BUSDT")
+			h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "AUSDT", 150), sfPair("bybit", "BUSDT", 150)}
+			h.tick(0) // 시작 메시지 (단계 밖)
+			// 50% 단계 (비긴급 1회 전송), 항목 순서 AUSDT → BUSDT
+			h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "AUSDT", 49.5), sfPair("bybit", "BUSDT", 49.5)}
+			at := h.now.Add(5 * time.Second)
+			runes := func(p *HedgedPositionPair) int {
+				return utf8.RuneCountInString(liqLine("[청산 근접 ≤50%]", p, at, "없음"))
+			}
+			a := &h.snap.Pairs[0]
+			a.Coin += strings.Repeat("X", c.total-runes(a)-runes(&h.snap.Pairs[1])-utf8.RuneCountInString(liqSep+liqSep+liqFooter))
+			h.tick(5 * time.Second)
+			parts, lens, over := h.sent[1:], []int{}, false
+			var bodies []string
+			for _, m := range parts {
+				lens = append(lens, utf8.RuneCountInString(m))
+				over = over || lens[len(lens)-1] > 4096
+				bodies = append(bodies, strings.TrimSuffix(m, liqSep+liqFooter))
+			}
+			whole := utf8.RuneCountInString(strings.Join(bodies, liqSep) + liqSep + liqFooter)
+			if len(parts) != c.parts || over || whole != c.total {
+				t.Fatalf("want %d part(s) each ≤4096 from a %d-rune total: got %d part(s), rune lengths %v, total %d", c.parts, c.total, len(parts), lens, whole)
+			}
+		})
+	}
+}
+
+// Start 마다 시작 메시지 1회 (Stop→Start 가 다시 보냄). 루프 주기 1시간 → 평가는 수동 호출만.
+func TestLiqAlertStartMessagePerStart(t *testing.T) {
+	h := newLiqTest(t)
+	h.on("bybit", "BTCUSDT")
+	h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "BTCUSDT", 150)}
+	h.s.interval = time.Hour
+	var seen int
+	for i := 1; i <= 2; i++ {
+		h.s.Start(context.Background())
+		h.tick(5 * time.Second)
+		h.tick(5 * time.Second)
+		h.s.Stop()
+		if n := h.newSent(&seen); n != 1 || !strings.Contains(h.last(), "모니터링 시작") {
+			t.Fatalf("start %d: want one 모니터링 시작, got %d %q", i, n, h.sent)
+		}
+	}
+}
+
+// 경계: 거리 == 단계 pct → 그 단계 (≤); 상승 == 20% → 알림 (≥); 5% 단계 체류 중 거리 == 0 → 도달/초과 즉시.
+func TestLiqAlertBoundaries(t *testing.T) {
+	h := newLiqTest(t)
+	h.on("bybit", "BTCUSDT")
+	h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "BTCUSDT", 0)}
+	leg := h.snap.Pairs[0].FuturesLeg
+	leg.MarkPrice, leg.EntryPrice, leg.LiquidationPrice = 100, 100, fp(115) // 거리 정확히 15.0
+	h.tick(0)
+	if !strings.Contains(h.last(), "[청산 근접 ≤15%]") {
+		t.Fatalf("distance == 15 must enter the 15%% tier: %q", h.last())
+	}
+
+	h = newLiqTest(t)
+	h.on("bybit", "BTCUSDT")
+	h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "BTCUSDT", 0)}
+	leg = h.snap.Pairs[0].FuturesLeg
+	leg.MarkPrice, leg.EntryPrice, leg.LiquidationPrice = 12, 10, nil // 상승 정확히 20.0
+	h.tick(0)
+	if !strings.Contains(h.last(), "[상승 +20%]") {
+		t.Fatalf("rise == 20 must alert: %q", h.last())
+	}
+
+	h = newLiqTest(t)
+	h.on("bybit", "BTCUSDT")
+	h.snap.Pairs = []HedgedPositionPair{sfPair("bybit", "BTCUSDT", 4)}
+	var seen int
+	h.tick(0)
+	h.newSent(&seen)
+	setDist(&h.snap.Pairs[0], 0) // mark == liq
+	h.tick(30 * time.Second)
+	if n := h.newSent(&seen); n != liqUrgentCopies || !strings.HasPrefix(h.last(), "[추정 청산가 도달/초과]") {
+		t.Fatalf("distance == 0 inside the 5%% tier must send 도달/초과 immediately: %d %q", n, h.last())
 	}
 }
