@@ -19,6 +19,7 @@ import (
 	"github.com/londonpotato1/position-monitor/internal/exchange/okx"
 	"github.com/londonpotato1/position-monitor/internal/exchange/upbit"
 	"github.com/londonpotato1/position-monitor/internal/gap"
+	"github.com/londonpotato1/position-monitor/internal/notify"
 	"github.com/londonpotato1/position-monitor/internal/services"
 	"github.com/londonpotato1/position-monitor/pkg/logger"
 )
@@ -31,6 +32,7 @@ type App struct {
 	logger       *logger.Logger
 	exchangeMgr  *services.ExchangeManager
 	posCache     *services.PositionCache
+	liqAlertSvc  *services.LiqAlertService
 	portfolioSvc *services.PortfolioService
 	snapshotSvc  *services.SnapshotService
 	btcPriceSvc  *services.BTCPriceService
@@ -163,6 +165,17 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
+	// LiqAlertService 초기화 (ON 토글된 헷지 선물 숏의 청산 근접/상승 텔레그램 알림) — posCache·exchangeMgr 준비 후
+	// notifier 마스터 스위치는 시작 시점 설정값으로 고정 (생성자가 실효 상태/사유를 로그)
+	notifier := notify.NewTelegramNotifier(cfg.Telegram.BotToken, cfg.Telegram.ChatID, cfg.Telegram.Enabled, zlog)
+	liqAlertSvc, err := services.NewLiqAlertService(resolveDataPath("data/liq_alerts.db"), a.posCache, a.exchangeMgr, notifier, zlog)
+	if err != nil {
+		a.logger.Error("liq alert service init failed", "error", err)
+	} else {
+		a.liqAlertSvc = liqAlertSvc
+		a.liqAlertSvc.Start(ctx)
+	}
+
 	// PortfolioService 초기화 (포트폴리오 대시보드)
 	portfolioSvc, err := services.NewPortfolioService(a.exchangeMgr, a.posCache, resolveDataPath("data/history.db"), zlog)
 	if err != nil {
@@ -231,6 +244,10 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.wsManager != nil {
 		_ = a.wsManager.Stop()
 	}
+	if a.liqAlertSvc != nil {
+		a.liqAlertSvc.Stop()
+		_ = a.liqAlertSvc.Close()
+	}
 	if a.snapshotSvc != nil {
 		a.snapshotSvc.Close()
 	}
@@ -263,6 +280,24 @@ func (a *App) RefreshHedgedPositions() error {
 	}
 	a.posCache.Refresh(context.Background())
 	return nil
+}
+
+// ========== 청산 근접/상승 알림 Wails 바인딩 ==========
+
+// GetLiqAlertStatus ON 키별 감시 상태, 전달 가능 여부/사유, 알림 지원 거래소
+func (a *App) GetLiqAlertStatus() (services.LiqAlertStatus, error) {
+	if a.liqAlertSvc == nil {
+		return services.LiqAlertStatus{}, fmt.Errorf("liq alert service not initialized")
+	}
+	return a.liqAlertSvc.Status(), nil
+}
+
+// SetLiqAlertEnabled 선물 포지션 키(거래소 + 원시 선물 심볼) 알림 ON/OFF. 미지원 거래소/저장 실패는 error.
+func (a *App) SetLiqAlertEnabled(exchange, symbol string, enabled bool) error {
+	if a.liqAlertSvc == nil {
+		return fmt.Errorf("liq alert service not initialized")
+	}
+	return a.liqAlertSvc.SetEnabled(exchange, symbol, enabled)
 }
 
 // ========== 포트폴리오 대시보드 Wails 바인딩 ==========

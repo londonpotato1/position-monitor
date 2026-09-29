@@ -6,6 +6,7 @@ import React from 'react'
 import type { HedgedPositionPair } from '../types'
 import { getExchangeColor } from './ExchangeBadge'
 import PnLDisplay from './PnLDisplay'
+import { formatQty } from './positionDisplay'
 
 interface Props {
   pairs: HedgedPositionPair[]
@@ -67,7 +68,7 @@ export default function FuturesPairTable({ pairs }: Props) {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right font-mono" style={{ color: '#3fb950' }}>
-                    {(longLeg?.size ?? 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                    {formatQty(longLeg?.size ?? 0)}
                   </td>
                   <td className="px-3 py-2">
                     <span style={{ color: getExchangeColor(shortLeg?.exchange ?? ''), fontWeight: 600 }}>
@@ -75,10 +76,10 @@ export default function FuturesPairTable({ pairs }: Props) {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right font-mono" style={{ color: '#f85149' }}>
-                    {(shortLeg?.size ?? 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                    {formatQty(shortLeg?.size ?? 0)}
                   </td>
                   <td className="px-3 py-2 text-right font-mono" style={{ color: '#adbac7' }}>
-                    {p.matchedSize.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                    {formatQty(p.matchedSize)}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <PnLDisplay value={p.futuresPnl ?? 0} />

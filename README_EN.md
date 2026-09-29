@@ -11,6 +11,9 @@ A desktop app (Wails + React) that connects to 12 crypto exchanges with **read-o
 2. **Unmatched positions** — single-leg positions that broke a hedge, with PnL
 3. **Balance dashboard** — total assets (USD/KRW), 24h change, cumulative return, BTC chart, asset distribution
 4. **Settings** — exchange enable/disable view
+5. **Telegram liquidation alerts (optional, off by default)** — see [Telegram liquidation alerts](#telegram-liquidation-alerts-optional)
+
+The hedge pairs table shows the liquidation price for Binance, Bybit, OKX, Gate, Bitget and Hyperliquid futures. Its mark/liquidation prices use 2 decimals at ≥ 0.1 and 5 decimals below 0.1 (ultra-low prices: 3 significant digits); quantities in the position tables use 2 decimals (tiny quantities: 3 significant digits).
 
 No trading code is included. The exchange adapters expose only ticker / orderbook / balance / position read methods.
 
@@ -96,6 +99,25 @@ See [`.env.example`](.env.example) for the full list.
 - The Balance Dashboard aggregates USD value across exchanges using a live USDT/KRW rate (Upbit → Bithumb fallback)
 - Daily snapshots are stored locally in `data/` (SQLite)
 
+## Telegram liquidation alerts (optional)
+
+Each futures-short row in the hedge pairs table has an alert ON/OFF toggle. Only rows you turn ON send alerts, to your own Telegram bot. Notifications only — no trading. Off by default. Alert text is in Korean.
+
+- Supported exchanges: Binance, Bybit, OKX, Gate, Bitget, Hyperliquid
+- Distance to liquidation: 100 / 80 / 70 / 60 / 50% once on entry; while in the tier, 40% repeats every 4h, 30% every 1h, 15% every 15m, 5% every 2m. A separate alert when the estimated liquidation price is reached/exceeded
+- Price rise vs futures entry: +20 / 30 / 40%
+- Urgent alerts (≤15% tiers, reached/exceeded, rise alerts) are sent 10 times, 1 second apart
+- Status messages: each time monitoring starts, one "monitoring started (N ON)" message listing the ON rows (once at least one row is ON). If a position cannot be checked (data older than 30 s, or exchange disconnected / fetch failed) for over 60 s, one "watch unavailable" message, then one "watch recovered" when it is back or one "watch ended" if the position is gone. Tier state is in memory only, so after an app restart the current tier is alerted once again
+- Toggles are stored in `data/liq_alerts.db`
+
+To enable:
+
+1. Set `telegram.enabled: true` in `config.yaml`
+2. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`
+3. Restart the app (both are read only at startup), then turn ON the alert for the rows you want
+
+If a row is ON but alerts cannot be delivered (switch off / missing keys), the hedge pairs table shows a banner with the reason.
+
 ## What this app does NOT do
 
 - Place orders
@@ -103,10 +125,9 @@ See [`.env.example`](.env.example) for the full list.
 - Close positions
 - Set leverage
 - Withdraw or transfer funds
-- Send notifications (Telegram, etc.)
 - Sync to Google Sheets / Excel
 
-The interface and adapter code for these features has been removed entirely. If you fork and want trading, you'll have to implement it yourself.
+The interface and adapter code for these features has been removed entirely. If you fork and want trading, you'll have to implement it yourself. The only outbound message the app sends is the optional Telegram liquidation alert to your own bot.
 
 ## License
 

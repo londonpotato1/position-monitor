@@ -7,6 +7,7 @@ import type { HedgedPositionLeg } from '../types'
 import { usePositionStore } from '../stores/positionStore'
 import { getExchangeColor } from './ExchangeBadge'
 import PnLDisplay from './PnLDisplay'
+import { formatQty } from './positionDisplay'
 import { GetExchangeStatuses } from '../../wailsjs/go/main/App'
 
 const SMALL_THRESHOLD = 1.0
@@ -221,7 +222,7 @@ export default function UnmatchedTable({ unmatched }: Props) {
                       {sideLabel}
                     </td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: '#adbac7' }}>
-                      <div>{u.size.toLocaleString(undefined, { maximumFractionDigits: 4 })}</div>
+                      <div>{formatQty(u.size)}</div>
                       {u.markPrice > 0 && (
                         <div className="text-[10px]" style={{ color: '#484f58' }}>
                           ${(u.size * u.markPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}

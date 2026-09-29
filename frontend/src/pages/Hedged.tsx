@@ -7,7 +7,7 @@ import { FailedExchangesBanner } from '../components/PnLDisplay'
 const REFRESH_INTERVAL_MS = 5000
 
 export default function Hedged() {
-  const { pairs, updatedAt, loading, error, failedExchanges, fetchPositions } = usePositionStore()
+  const { pairs, updatedAt, loading, error, failedExchanges, fetchPositions, liqAlert, liqAlertError } = usePositionStore()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -66,7 +66,8 @@ export default function Hedged() {
         </div>
       )}
 
-      {sfPairs.length > 0 && <HedgePairTable pairs={sfPairs} />}
+      {/* 헷지 행이 없어도 켜둔 알림(ON · 현재 행 없음)을 끌 수 있도록 표를 유지 */}
+      {(sfPairs.length > 0 || (liqAlert?.keys.length ?? 0) > 0 || !!liqAlertError) && <HedgePairTable pairs={sfPairs} />}
       {ffPairs.length > 0 && <FuturesPairTable pairs={ffPairs} />}
     </div>
   )

@@ -114,6 +114,14 @@ func (pc *PositionCache) Get(ctx context.Context) HedgedPositionsResponse {
 	return pc.cached
 }
 
+// Snapshot 캐시 응답과 마지막 갱신 시각을 그대로 반환 — Get 과 달리 절대 Refresh 하지 않는다 (알림 루프용).
+// 반환된 Pairs/포인터 필드는 캐시와 공유되므로 읽기 전용으로만 사용한다.
+func (pc *PositionCache) Snapshot() (HedgedPositionsResponse, time.Time) {
+	pc.mu.RLock()
+	defer pc.mu.RUnlock()
+	return pc.cached, pc.lastRefresh
+}
+
 // Refresh 캐시 강제 새로고침
 func (pc *PositionCache) Refresh(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)

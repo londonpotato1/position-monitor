@@ -45,6 +45,14 @@ type ExchangeConfig struct {
 	Enabled           bool   `mapstructure:"enabled" yaml:"enabled"`
 }
 
+// TelegramConfig 텔레그램 설정 (기본 비활성).
+// 토큰/채팅 ID 는 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 환경변수로 주입, SaveConfig 는 저장하지 않음.
+type TelegramConfig struct {
+	Enabled  bool   `mapstructure:"enabled" yaml:"enabled"`
+	BotToken string `mapstructure:"bot_token" yaml:"bot_token"`
+	ChatID   string `mapstructure:"chat_id" yaml:"chat_id"`
+}
+
 // PositionConfig 포지션 관리 설정
 type PositionConfig struct {
 	RefreshInterval    int     `mapstructure:"refresh_interval" yaml:"refresh_interval"`
@@ -65,6 +73,9 @@ type Config struct {
 
 	// 해외 거래소 설정 (이름 -> ExchangeConfig)
 	Exchanges map[string]ExchangeConfig `mapstructure:"exchanges" yaml:"exchanges"`
+
+	// 텔레그램 설정
+	Telegram TelegramConfig `mapstructure:"telegram" yaml:"telegram"`
 
 	// 포지션 관리 설정
 	Position PositionConfig `mapstructure:"position" yaml:"position"`
@@ -149,6 +160,8 @@ func LoadConfig(path string) (*Config, error) {
 	// 환경변수 바인딩
 	v.BindEnv("upbit.api_key", "UPBIT_API_KEY")
 	v.BindEnv("upbit.api_secret", "UPBIT_API_SECRET")
+	v.BindEnv("telegram.bot_token", "TELEGRAM_BOT_TOKEN")
+	v.BindEnv("telegram.chat_id", "TELEGRAM_CHAT_ID")
 
 	if err := v.ReadInConfig(); err != nil {
 		// 파일이 없으면 기본값 사용
@@ -291,6 +304,8 @@ func SaveConfig(path string, cfg *Config) error {
 	safeCfg.Upbit.APISecret = ""
 	safeCfg.Bithumb.APIKey = ""
 	safeCfg.Bithumb.APISecret = ""
+	safeCfg.Telegram.BotToken = ""
+	safeCfg.Telegram.ChatID = ""
 
 	safeExchanges := make(map[string]ExchangeConfig, len(cfg.Exchanges))
 	for name, ec := range cfg.Exchanges {

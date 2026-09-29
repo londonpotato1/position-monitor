@@ -7,7 +7,10 @@ import type { HedgedPositionPair, HedgedPositionLeg, FailedExchange } from '../t
 import {
   GetHedgedPositions,
   RefreshHedgedPositions,
+  GetLiqAlertStatus,
+  SetLiqAlertEnabled,
 } from '../../wailsjs/go/main/App'
+import type { services } from '../../wailsjs/go/models'
 
 interface PositionState {
   pairs: HedgedPositionPair[]
@@ -23,8 +26,14 @@ interface PositionState {
   unmatchedTypeFilter: 'all' | 'spot' | 'futures'
   unmatchedExchangeFilter: string
 
+  // 청산 근접/상승 알림 상태 (null = 조회 전 또는 조회 실패 → liqAlertError)
+  liqAlert: services.LiqAlertStatus | null
+  liqAlertError: string | null
+
   // 액션
   fetchPositions: () => Promise<void>
+  fetchLiqAlert: () => Promise<void>
+  setLiqAlert: (exchange: string, symbol: string, enabled: boolean) => Promise<void>  // 실패 시 throw
   refreshPositions: () => Promise<void>
   setHideSmallPairs: (v: boolean) => void
   setHideSmallUnmatched: (v: boolean) => void
@@ -52,6 +61,9 @@ export const usePositionStore = create<PositionState>((set, get) => ({
   unmatchedTypeFilter: 'all',
   unmatchedExchangeFilter: 'all',
 
+  liqAlert: null,
+  liqAlertError: null,
+
   fetchPositions: async () => {
     set({ loading: true, error: null })
     try {
@@ -70,6 +82,20 @@ export const usePositionStore = create<PositionState>((set, get) => ({
     } catch (err) {
       set({ error: String(err), loading: false })
     }
+    await get().fetchLiqAlert() // 기존 폴링에 편승 (별도 루프 없음)
+  },
+
+  fetchLiqAlert: async () => {
+    try {
+      set({ liqAlert: await GetLiqAlertStatus(), liqAlertError: null })
+    } catch (err) {
+      set({ liqAlert: null, liqAlertError: String(err) })
+    }
+  },
+
+  setLiqAlert: async (exchange: string, symbol: string, enabled: boolean) => {
+    await SetLiqAlertEnabled(exchange, symbol, enabled) // 오류는 호출자(UI)가 표시
+    await get().fetchLiqAlert()
   },
 
   refreshPositions: async () => {

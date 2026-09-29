@@ -35,3 +35,8 @@ exchanges:
 position:
   refresh_interval: 5         # seconds between auto-refresh
   hide_small_threshold: 1.0   # hide unmatched positions worth less than $1
+
+# Optional Telegram liquidation alerts (read at startup — restart after changing).
+# Bot token / chat ID are read from `.env` (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID).
+telegram:
+  enabled: false
