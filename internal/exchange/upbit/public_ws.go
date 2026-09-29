@@ -181,13 +181,15 @@ func (c *PublicWSClient) addSub(symbol string, isTicker bool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// codes 가 안 바뀌면 전송 생략 — Upbit websocket-message 초당 5회 제한 (초과 시 TOO_MANY_REQUEST 후 close).
+	had := c.tickerSubs[coin] || c.orderbookSubs[coin]
 	if isTicker {
 		c.tickerSubs[coin] = true
 	} else {
 		c.orderbookSubs[coin] = true
 	}
 
-	if !c.connected || c.conn == nil {
+	if had || !c.connected || c.conn == nil {
 		return nil
 	}
 	return c.sendSubscribe(c.conn, c.activeCodes())
@@ -204,7 +206,8 @@ func (c *PublicWSClient) removeSub(symbol string, isTicker bool) error {
 		delete(c.orderbookSubs, coin)
 	}
 
-	if !c.connected || c.conn == nil {
+	// 다른 쪽 구독이 남아 있으면 codes 불변 → 전송 생략.
+	if c.tickerSubs[coin] || c.orderbookSubs[coin] || !c.connected || c.conn == nil {
 		return nil
 	}
 	codes := c.activeCodes()
