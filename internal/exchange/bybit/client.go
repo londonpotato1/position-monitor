@@ -169,14 +169,15 @@ type APIResponse struct {
 
 // PositionInfo 포지션 정보
 type PositionInfo struct {
-	Symbol        string `json:"symbol"`
-	Side          string `json:"side"`
-	Size          string `json:"size"`
-	AvgPrice      string `json:"avgPrice"`
-	MarkPrice     string `json:"markPrice"`
-	PositionValue string `json:"positionValue"`
-	Leverage      string `json:"leverage"`
-	UnrealisedPnl string `json:"unrealisedPnl"`
+	Symbol        string          `json:"symbol"`
+	Side          string          `json:"side"`
+	Size          string          `json:"size"`
+	AvgPrice      string          `json:"avgPrice"`
+	MarkPrice     string          `json:"markPrice"`
+	PositionValue string          `json:"positionValue"`
+	Leverage      string          `json:"leverage"`
+	UnrealisedPnl string          `json:"unrealisedPnl"`
+	LiqPrice      json.RawMessage `json:"liqPrice"` // 청산가 (docs: string, 미제공 시 "")
 }
 
 // WalletBalance 지갑 잔고 (coin 레벨)

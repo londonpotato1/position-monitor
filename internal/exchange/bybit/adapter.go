@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -441,19 +442,28 @@ func (a *Adapter) GetAllPositions(ctx context.Context) ([]*exchange.Position, er
 		pnl, _ := strconv.ParseFloat(p.UnrealisedPnl, 64)
 		leverage, _ := strconv.Atoi(p.Leverage)
 
+		var liq *float64
+		var rawLiq string
+		if json.Unmarshal(p.LiqPrice, &rawLiq) == nil {
+			if v, err := strconv.ParseFloat(rawLiq, 64); err == nil && v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) {
+				liq = &v
+			}
+		}
+
 		side := "long"
 		if p.Side == "Sell" {
 			side = "short"
 		}
 
 		result = append(result, &exchange.Position{
-			Symbol:       p.Symbol,
-			Side:         side,
-			Size:         size,
-			EntryPrice:   entry,
-			MarkPrice:    mark,
-			UnrealizedPL: pnl,
-			Leverage:     leverage,
+			Symbol:           p.Symbol,
+			Side:             side,
+			Size:             size,
+			EntryPrice:       entry,
+			MarkPrice:        mark,
+			LiquidationPrice: liq,
+			UnrealizedPL:     pnl,
+			Leverage:         leverage,
 		})
 	}
 

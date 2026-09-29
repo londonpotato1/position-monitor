@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -545,13 +546,14 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 	}
 
 	var raw []struct {
-		InstID  string `json:"instId"`
-		PosSide string `json:"posSide"`
-		Pos     string `json:"pos"`
-		AvgPx   string `json:"avgPx"`
-		MarkPx  string `json:"markPx"`
-		Upl     string `json:"upl"`
-		Lever   string `json:"lever"`
+		InstID  string          `json:"instId"`
+		PosSide string          `json:"posSide"`
+		Pos     string          `json:"pos"`
+		AvgPx   string          `json:"avgPx"`
+		MarkPx  string          `json:"markPx"`
+		LiqPx   json.RawMessage `json:"liqPx"`
+		Upl     string          `json:"upl"`
+		Lever   string          `json:"lever"`
 	}
 	if err := json.Unmarshal(resp.Data, &raw); err != nil {
 		return nil, err
@@ -589,14 +591,23 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 		unrealizedPL, _ := strconv.ParseFloat(r.Upl, 64)
 		leverage, _ := strconv.Atoi(r.Lever)
 
+		var liquidationPrice *float64
+		var rawLiquidation string
+		if json.Unmarshal(r.LiqPx, &rawLiquidation) == nil {
+			if price, err := strconv.ParseFloat(rawLiquidation, 64); err == nil && price > 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
+				liquidationPrice = &price
+			}
+		}
+
 		positions = append(positions, &exchange.Position{
-			Symbol:       r.InstID,
-			Side:         side,
-			Size:         size,
-			EntryPrice:   entryPrice,
-			MarkPrice:    markPrice,
-			UnrealizedPL: unrealizedPL,
-			Leverage:     leverage,
+			Symbol:           r.InstID,
+			Side:             side,
+			Size:             size,
+			EntryPrice:       entryPrice,
+			MarkPrice:        markPrice,
+			LiquidationPrice: liquidationPrice,
+			UnrealizedPL:     unrealizedPL,
+			Leverage:         leverage,
 		})
 	}
 

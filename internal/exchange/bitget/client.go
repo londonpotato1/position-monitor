@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -499,13 +500,14 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 	}
 
 	var items []struct {
-		Symbol       string `json:"symbol"`
-		HoldSide     string `json:"holdSide"`
-		Total        string `json:"total"`
-		OpenPriceAvg string `json:"openPriceAvg"`
-		MarkPrice    string `json:"markPrice"`
-		UnrealisedPL string `json:"unrealisedPL"`
-		Leverage     string `json:"leverage"`
+		Symbol           string          `json:"symbol"`
+		HoldSide         string          `json:"holdSide"`
+		Total            string          `json:"total"`
+		OpenPriceAvg     string          `json:"openPriceAvg"`
+		MarkPrice        string          `json:"markPrice"`
+		UnrealisedPL     string          `json:"unrealisedPL"`
+		Leverage         string          `json:"leverage"`
+		LiquidationPrice json.RawMessage `json:"liquidationPrice"`
 	}
 	if err := json.Unmarshal(resp.Data, &items); err != nil {
 		return nil, err
@@ -522,14 +524,24 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 		unrealizedPL, _ := strconv.ParseFloat(item.UnrealisedPL, 64)
 		leverage, _ := strconv.Atoi(item.Leverage)
 
+		// docs: liquidationPrice <= 0 이면 청산가 없음 → nil
+		var liquidationPrice *float64
+		var rawLiquidation string
+		if json.Unmarshal(item.LiquidationPrice, &rawLiquidation) == nil {
+			if price, err := strconv.ParseFloat(rawLiquidation, 64); err == nil && price > 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
+				liquidationPrice = &price
+			}
+		}
+
 		positions = append(positions, &exchange.Position{
-			Symbol:       item.Symbol,
-			Side:         item.HoldSide,
-			Size:         size,
-			EntryPrice:   entryPrice,
-			MarkPrice:    markPrice,
-			UnrealizedPL: unrealizedPL,
-			Leverage:     leverage,
+			Symbol:           item.Symbol,
+			Side:             item.HoldSide,
+			Size:             size,
+			EntryPrice:       entryPrice,
+			MarkPrice:        markPrice,
+			UnrealizedPL:     unrealizedPL,
+			Leverage:         leverage,
+			LiquidationPrice: liquidationPrice,
 		})
 	}
 

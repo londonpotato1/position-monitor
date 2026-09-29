@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -463,6 +464,7 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 					Type  string `json:"type"`
 					Value int    `json:"value"`
 				} `json:"leverage"`
+				LiquidationPx json.RawMessage `json:"liquidationPx"`
 			} `json:"position"`
 		} `json:"assetPositions"`
 	}
@@ -503,14 +505,23 @@ func (c *Client) GetAllPositions(ctx context.Context) ([]*exchange.Position, err
 			markPrice = posVal / size
 		}
 
+		var liquidationPrice *float64
+		var rawLiquidation string
+		if json.Unmarshal(ap.Position.LiquidationPx, &rawLiquidation) == nil {
+			if price, err := strconv.ParseFloat(rawLiquidation, 64); err == nil && price > 0 && !math.IsNaN(price) && !math.IsInf(price, 0) {
+				liquidationPrice = &price
+			}
+		}
+
 		positions = append(positions, &exchange.Position{
-			Symbol:       ap.Position.Coin,
-			Side:         side,
-			Size:         size,
-			EntryPrice:   entryPrice,
-			MarkPrice:    markPrice,
-			UnrealizedPL: unrealizedPL,
-			Leverage:     ap.Position.Leverage.Value,
+			Symbol:           ap.Position.Coin,
+			Side:             side,
+			Size:             size,
+			EntryPrice:       entryPrice,
+			MarkPrice:        markPrice,
+			LiquidationPrice: liquidationPrice,
+			UnrealizedPL:     unrealizedPL,
+			Leverage:         ap.Position.Leverage.Value,
 		})
 	}
 
