@@ -17,6 +17,7 @@ var FuturesRegistry = map[string]map[string]FuturesMapping{
 		"LUNA":     {FuturesBase: "LUNA2", ScaleFactor: 1},
 		"BEAM":     {FuturesBase: "BEAMX", ScaleFactor: 1},
 		"BROCCOLI": {FuturesBase: "BROCCOLI714", ScaleFactor: 1},
+		"PROS":     {FuturesBase: "PHAROS", ScaleFactor: 1}, // Pharos Network (구 Prosper 토큰 아님)
 		// 1000x 토큰
 		"SHIB":   {FuturesBase: "1000SHIB", ScaleFactor: 1000},
 		"PEPE":   {FuturesBase: "1000PEPE", ScaleFactor: 1000},
@@ -37,6 +38,7 @@ var FuturesRegistry = map[string]map[string]FuturesMapping{
 		"PUMP":  {FuturesBase: "PUMPFUN", ScaleFactor: 1},
 		"NEIRO": {FuturesBase: "NEIROCTO", ScaleFactor: 1},
 		"AI":    {FuturesBase: "AIGENSYN", ScaleFactor: 1}, // OKX 현물 AI(Gensyn) ↔ Bybit 선물 AIGENSYN
+		"PROS":  {FuturesBase: "PHAROS", ScaleFactor: 1},   // Pharos Network (구 Prosper 토큰 아님)
 		// 1000x 토큰
 		"SHIB":  {FuturesBase: "SHIB1000", ScaleFactor: 1000},
 		"PEPE":  {FuturesBase: "1000PEPE", ScaleFactor: 1000},

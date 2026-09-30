@@ -49,3 +49,23 @@ func TestPositionDisplaySplitAndScale(t *testing.T) {
 		})
 	}
 }
+
+// PROS(Pharos): Binance/Bybit 선물 PHAROSUSDT 숏이 국내 PROS와 쌍을 이루고, 어댑터 조회 경로도 같은 PHAROS로 변환돼야 한다.
+func TestMatchPairsPharosFutures(t *testing.T) {
+	for _, tc := range []struct{ futEx, symbol, wantFutBase string }{
+		{"binance", "PHAROSUSDT", "PHAROS"}, {"bybit", "PHAROSUSDT", "PHAROS"}, {"okx", "PROS-USDT-SWAP", "PROS"},
+	} {
+		t.Run(tc.futEx, func(t *testing.T) {
+			p := &exchange.Position{Symbol: tc.symbol, Side: "short", Size: 100}
+			result := NewPositionCache(nil, 0, zerolog.Nop()).matchPairs(
+				[]spotHolding{{exchange: "upbit", coin: "PROS", total: 100, isDomestic: true}},
+				[]futuresPos{{exchange: tc.futEx, coin: extractCoin(tc.symbol), position: p}})
+			if len(result.Pairs) != 1 || len(result.Unmatched) != 0 || result.Pairs[0].PairID != "upbit_"+tc.futEx+"_PROS" {
+				t.Fatalf("expected one pair upbit_%s_PROS, no unmatched: %+v", tc.futEx, result)
+			}
+			if base, factor := exchange.ResolveFuturesMapping(tc.futEx, result.Pairs[0].Coin); base != tc.wantFutBase || factor != 1 {
+				t.Fatalf("adapter path resolves %s %s → (%s, %v), want (%s, 1)", tc.futEx, result.Pairs[0].Coin, base, factor, tc.wantFutBase)
+			}
+		})
+	}
+}
