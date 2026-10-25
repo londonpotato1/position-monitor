@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	publicWSURL    = "wss://ws.okx.com:8443/ws/v5/public"
+	publicWSURL    = "wss://ws.okx.com/ws/v5/public"
 	pubPingInterval = 20 * time.Second
 )
 

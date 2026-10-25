@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	privateWSURL    = "wss://ws.okx.com:8443/ws/v5/private"
+	privateWSURL    = "wss://ws.okx.com/ws/v5/private"
 	pingInterval    = 25 * time.Second
 	pongDeadline    = 30 * time.Second
 )
