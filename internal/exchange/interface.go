@@ -67,6 +67,7 @@ type Position struct {
 	LiquidationPrice *float64 // 거래소 제공 청산가 (미제공 시 nil)
 	UnrealizedPL     float64  // 미실현 손익
 	Leverage         int      // 레버리지
+	TradFi           bool     // 거래소 상품정보상 주식·ETF·원자재·외환 등 비암호 선물 (어댑터가 설정)
 }
 
 // DomesticExchange 국내 거래소 인터페이스 (업비트/빗썸)

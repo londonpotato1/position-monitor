@@ -4,6 +4,8 @@ package bitget
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/londonpotato1/position-monitor/internal/exchange"
 )
@@ -11,6 +13,9 @@ import (
 // Adapter Bitget 어댑터 (OverseasExchange 인터페이스 구현)
 type Adapter struct {
 	client *Client
+
+	// TradFi 선물 심볼 캐시 — GetAllPositions 가 Position.TradFi 설정 (주식 선물을 같은 티커 코인과 짝짓지 않게)
+	tradFi exchange.TradFiSet
 }
 
 // NewAdapter 새 어댑터 생성
@@ -73,9 +78,44 @@ func (a *Adapter) GetAllBalances(ctx context.Context) (map[string]*exchange.Bala
 
 // ========== 포지션 ==========
 
-// GetAllPositions 전체 선물 포지션 조회
+// GetAllPositions 전체 선물 포지션 조회 (TradFi 선물 표시 포함)
 func (a *Adapter) GetAllPositions(ctx context.Context) ([]*exchange.Position, error) {
-	return a.client.GetAllPositions(ctx)
+	positions, err := a.client.GetAllPositions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a.tradFi.Mark("bitget", positions, a.loadTradFi)
+	return positions, nil
+}
+
+// loadTradFi USDT-FUTURES 상품정보에서 isRwa 가 "YES"(주식·원자재·외환 등 RWA)인 symbol 수집
+// docs: symbol 을 생략하면 한 번에 전체 반환 (페이지네이션 없음)
+func (a *Adapter) loadTradFi() (map[string]bool, error) {
+	data, err := a.client.publicRequest("/api/v2/mix/market/contracts?productType=USDT-FUTURES")
+	if err != nil {
+		return nil, err
+	}
+	var resp APIResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("contracts code=%s msg=%s", resp.Code, resp.Msg)
+	}
+	var contracts []struct {
+		Symbol string `json:"symbol"`
+		IsRwa  string `json:"isRwa"`
+	}
+	if err := json.Unmarshal(resp.Data, &contracts); err != nil {
+		return nil, err
+	}
+	set := map[string]bool{}
+	for _, c := range contracts {
+		if c.IsRwa == "YES" {
+			set[c.Symbol] = true
+		}
+	}
+	return set, nil
 }
 
 // GetPosition 포지션 조회

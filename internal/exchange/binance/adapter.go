@@ -4,6 +4,7 @@ package binance
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/londonpotato1/position-monitor/internal/exchange"
 	"github.com/londonpotato1/position-monitor/pkg/logger"
@@ -12,6 +13,9 @@ import (
 // Adapter 바이낸스 어댑터 (OverseasExchange 인터페이스 구현)
 type Adapter struct {
 	client *Client
+
+	// TradFi 선물 심볼 캐시 — GetAllPositions 가 Position.TradFi 설정 (주식 선물을 같은 티커 코인과 짝짓지 않게)
+	tradFi exchange.TradFiSet
 }
 
 // NewAdapter 새 어댑터 생성
@@ -141,9 +145,38 @@ func (a *Adapter) GetAllBalances(ctx context.Context) (map[string]*exchange.Bala
 
 // ========== 포지션 ==========
 
-// GetAllPositions 전체 선물 포지션 조회
+// GetAllPositions 전체 선물 포지션 조회 (TradFi 선물 표시 포함)
 func (a *Adapter) GetAllPositions(ctx context.Context) ([]*exchange.Position, error) {
-	return a.client.GetAllPositions(ctx)
+	positions, err := a.client.GetAllPositions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a.tradFi.Mark("binance", positions, a.loadTradFi)
+	return positions, nil
+}
+
+// loadTradFi USDⓈ-M 전체 exchangeInfo 에서 contractType=TRADIFI_PERPETUAL 심볼 수집
+func (a *Adapter) loadTradFi() (map[string]bool, error) {
+	data, err := a.client.publicRequest(FuturesBaseURL, "/fapi/v1/exchangeInfo")
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Symbols []struct {
+			Symbol       string `json:"symbol"`
+			ContractType string `json:"contractType"`
+		} `json:"symbols"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	set := map[string]bool{}
+	for _, s := range resp.Symbols {
+		if s.ContractType == "TRADIFI_PERPETUAL" {
+			set[s.Symbol] = true
+		}
+	}
+	return set, nil
 }
 
 // GetPosition 포지션 조회

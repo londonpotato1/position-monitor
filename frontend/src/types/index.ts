@@ -15,6 +15,7 @@ export interface HedgedPositionLeg {
   priceScaleFactor?: number
   pnl: number
   leverage: number
+  tradFi?: boolean
 }
 
 export interface HedgedPositionPair {

@@ -61,6 +61,15 @@ export default function FuturesPairTable({ pairs }: Props) {
                 >
                   <td className="px-3 py-2 font-semibold" style={{ color: '#e6edf3' }}>
                     {p.coin}
+                    {longLeg?.tradFi && (
+                      <span
+                        className="ml-1.5 px-1 py-px rounded text-[10px] font-medium whitespace-nowrap"
+                        style={{ backgroundColor: '#3d2e00', color: '#d29922' }}
+                        title="주식·원자재·외환 등 비암호 선물 — 같은 이름 코인과 짝짓지 않음"
+                      >
+                        주식
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span style={{ color: getExchangeColor(longLeg?.exchange ?? ''), fontWeight: 600 }}>

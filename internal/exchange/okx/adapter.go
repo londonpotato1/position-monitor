@@ -4,6 +4,8 @@ package okx
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/londonpotato1/position-monitor/internal/exchange"
 	"github.com/londonpotato1/position-monitor/pkg/logger"
@@ -12,6 +14,9 @@ import (
 // Adapter OKX 어댑터 (OverseasExchange 인터페이스 구현)
 type Adapter struct {
 	client *Client
+
+	// TradFi 선물 심볼 캐시 — GetAllPositions 가 Position.TradFi 설정 (주식 선물을 같은 티커 코인과 짝짓지 않게)
+	tradFi exchange.TradFiSet
 }
 
 // NewAdapter 새 어댑터 생성
@@ -74,9 +79,45 @@ func (a *Adapter) GetAllBalances(ctx context.Context) (map[string]*exchange.Bala
 
 // ========== 포지션 ==========
 
-// GetAllPositions 전체 선물 포지션 조회
+// GetAllPositions 전체 선물 포지션 조회 (TradFi 선물 표시 포함)
 func (a *Adapter) GetAllPositions(ctx context.Context) ([]*exchange.Position, error) {
-	return a.client.GetAllPositions(ctx)
+	positions, err := a.client.GetAllPositions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a.tradFi.Mark("okx", positions, a.loadTradFi)
+	return positions, nil
+}
+
+// loadTradFi SWAP 상품정보에서 instCategory 가 주식(3)·원자재(4)·외환(5)·채권(6)인 instId 수집
+// docs: instType=SWAP 은 한 번에 전체 반환 (페이지네이션 없음), 폐기 예정인 category 필드는 쓰지 않는다
+func (a *Adapter) loadTradFi() (map[string]bool, error) {
+	data, err := a.client.publicRequest("/api/v5/public/instruments?instType=SWAP")
+	if err != nil {
+		return nil, err
+	}
+	var resp APIResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	if !resp.IsSuccess() {
+		return nil, fmt.Errorf("instruments code=%s msg=%s", resp.Code, resp.Msg)
+	}
+	var instruments []struct {
+		InstID       string `json:"instId"`
+		InstCategory string `json:"instCategory"`
+	}
+	if err := json.Unmarshal(resp.Data, &instruments); err != nil {
+		return nil, err
+	}
+	set := map[string]bool{}
+	for _, s := range instruments {
+		switch s.InstCategory {
+		case "3", "4", "5", "6":
+			set[s.InstID] = true
+		}
+	}
+	return set, nil
 }
 
 // GetPosition 포지션 조회

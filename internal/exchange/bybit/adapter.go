@@ -19,6 +19,9 @@ import (
 type Adapter struct {
 	client    *Client
 	connected atomic.Bool
+
+	// TradFi 선물 심볼 캐시 — GetAllPositions 가 Position.TradFi 설정 (주식 선물을 같은 티커 코인과 짝짓지 않게)
+	tradFi exchange.TradFiSet
 }
 
 // NewAdapter 새 어댑터 생성
@@ -467,7 +470,65 @@ func (a *Adapter) GetAllPositions(ctx context.Context) ([]*exchange.Position, er
 		})
 	}
 
+	a.tradFi.Mark("bybit", result, a.loadTradFi)
 	return result, nil
+}
+
+// instrumentsMaxPages instruments-info 페이지 상한 — linear 는 현재 900여 개(1000개씩 1쪽). 넘으면 커서 순환으로 보고 중단
+const instrumentsMaxPages = 20
+
+// loadTradFi linear instruments-info 에서 symbolType 이 주식·ETF·원자재·외환인 심볼 수집
+// docs: linear 기본 조회는 Trading/PendingOpen 만 반환 → 상장 전 주식 선물은 status=PreLaunch 로 따로 조회
+func (a *Adapter) loadTradFi() (map[string]bool, error) {
+	set := map[string]bool{}
+	for _, status := range []string{"", "PreLaunch"} {
+		cursor := ""
+		for page := 0; ; page++ {
+			// 커서가 끝없이 이어지면 포지션 조회가 멈춘다 — 실패로 처리해 이전 목록 유지
+			if page == instrumentsMaxPages {
+				return nil, fmt.Errorf("instruments-info %d쪽 초과 (status=%q)", instrumentsMaxPages, status)
+			}
+			params := map[string]string{"category": "linear", "limit": "1000"}
+			if status != "" {
+				params["status"] = status
+			}
+			if cursor != "" {
+				params["cursor"] = cursor
+			}
+			data, err := a.client.publicRequest("GET", "/v5/market/instruments-info", params)
+			if err != nil {
+				return nil, err
+			}
+			var resp struct {
+				RetCode int    `json:"retCode"`
+				RetMsg  string `json:"retMsg"`
+				Result  struct {
+					List []struct {
+						Symbol     string `json:"symbol"`
+						SymbolType string `json:"symbolType"`
+					} `json:"list"`
+					NextPageCursor string `json:"nextPageCursor"`
+				} `json:"result"`
+			}
+			if err := json.Unmarshal(data, &resp); err != nil {
+				return nil, err
+			}
+			if resp.RetCode != 0 {
+				return nil, fmt.Errorf("instruments-info retCode=%d msg=%s", resp.RetCode, resp.RetMsg)
+			}
+			for _, s := range resp.Result.List {
+				switch s.SymbolType {
+				case "stock", "ETF", "commodity", "forex":
+					set[s.Symbol] = true
+				}
+			}
+			if resp.Result.NextPageCursor == "" {
+				break
+			}
+			cursor = resp.Result.NextPageCursor
+		}
+	}
+	return set, nil
 }
 
 // IsUnifiedAccount Bybit UTA(Unified Trading Account)는 현물+선물 통합

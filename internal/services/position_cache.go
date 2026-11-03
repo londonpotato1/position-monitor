@@ -27,6 +27,10 @@ var stablecoins = map[string]bool{
 	"TUSD": true, "FDUSD": true, "USDE": true, "DAI": true, "USDP": true,
 }
 
+// 거래소가 TradFi 로 분류하지만 예외로 암호화폐처럼 매칭하는 토큰 —
+// 금 토큰 PAXG·XAUT (Gate 원자재, Bitget RWA), USDC (Gate 외환).
+var tradFiExempt = map[string]bool{"PAXG": true, "XAUT": true, "USDC": true}
+
 // HedgedPositionLeg 헷지 포지션의 한쪽 다리
 type HedgedPositionLeg struct {
 	Exchange         string   `json:"exchange"`
@@ -40,6 +44,7 @@ type HedgedPositionLeg struct {
 	PriceScaleFactor float64  `json:"priceScaleFactor,omitempty"`
 	PnL              float64  `json:"pnl"`
 	Leverage         int      `json:"leverage"`
+	TradFi           bool     `json:"tradFi,omitempty"`
 }
 
 // HedgedPositionPair 매칭된 헷지 포지션 쌍
@@ -492,23 +497,27 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 		pos     futuresPos
 		factor  float64 // 1000x 보정 계수
 		domCoin string  // 국내 매칭용 코인명
+		tradFi  bool    // 비암호 선물 (tradFiExempt 제외) — 같은 티커 암호화폐와 짝짓지 않음
+		// 레지스트리가 다른 계약으로 바꾸는 TradFi(예: 바이낸스 CAT→1000CAT) — 이름이 다른 계약을 가리키므로 짝짓지 않음
+		remapped bool
 	}
 
-	// 선물 -> 국내 코인명 매핑
+	// 선물 -> 국내 코인명 매핑 (TradFi 는 암호 레지스트리 역변환을 하지 않는다)
 	var futureEntries []futureEntry
 	for _, f := range futures {
-		domCoin, factor := normalize1000x(f.coin)
+		tradFi := f.position.TradFi && !tradFiExempt[f.coin]
+		domCoin, factor := f.coin, 1.0
+		if !tradFi {
+			domCoin, factor = normalize1000x(f.coin)
+		}
 		futureEntries = append(futureEntries, futureEntry{
 			pos:     f,
 			factor:  factor,
 			domCoin: domCoin,
-		})
-	}
+			tradFi:  tradFi,
 
-	// 선물 코인 목록 (해외 현물 더스트 필터용)
-	futureCoins := make(map[string]bool)
-	for _, fe := range futureEntries {
-		futureCoins[fe.domCoin] = true
+			remapped: tradFi && exchange.ResolveFuturesSymbol(f.exchange, f.coin) != f.coin,
+		})
 	}
 
 	var pairs []HedgedPositionPair
@@ -534,6 +543,9 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 		var sameCoinSide string
 		var sameCoinExchange string
 		for i, fe := range futureEntries {
+			if fe.tradFi {
+				continue // 비암호 선물은 현물과 짝짓지 않음
+			}
 			if !strings.EqualFold(spot.coin, fe.domCoin) {
 				continue
 			}
@@ -652,8 +664,14 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 		if longFe.pos.position.Size-consumedFuturesSize[i] <= 0 {
 			continue
 		}
+		if longFe.remapped {
+			continue
+		}
 		for j, shortFe := range futureEntries {
 			if i == j || matchedFutures[j] || shortFe.pos.position.Side != "short" {
+				continue
+			}
+			if shortFe.tradFi != longFe.tradFi || shortFe.remapped {
 				continue
 			}
 			if !strings.EqualFold(longFe.domCoin, shortFe.domCoin) {
@@ -688,6 +706,7 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 				MarkPrice:  longFe.pos.position.MarkPrice,
 				PnL:        longFe.pos.position.UnrealizedPL * longPnlRatio,
 				Leverage:   longFe.pos.position.Leverage,
+				TradFi:     longFe.tradFi,
 			}
 			shortLeg := &HedgedPositionLeg{
 				Exchange:   shortFe.pos.exchange,
@@ -699,6 +718,7 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 				MarkPrice:  shortFe.pos.position.MarkPrice,
 				PnL:        shortFe.pos.position.UnrealizedPL * shortPnlRatio,
 				Leverage:   shortFe.pos.position.Leverage,
+				TradFi:     shortFe.tradFi,
 			}
 
 			pairID := longFe.pos.exchange + "_" + shortFe.pos.exchange + "_" + longFe.domCoin + "_ff"
@@ -750,6 +770,7 @@ func (pc *PositionCache) matchPairs(spots []spotHolding, futures []futuresPos) H
 			MarkPrice:  fe.pos.position.MarkPrice,
 			PnL:        fe.pos.position.UnrealizedPL * ratio,
 			Leverage:   fe.pos.position.Leverage,
+			TradFi:     fe.tradFi,
 		})
 	}
 
