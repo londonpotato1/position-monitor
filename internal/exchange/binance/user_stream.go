@@ -79,7 +79,7 @@ func (s *UserStream) session(ctx context.Context) error {
 		return fmt.Errorf("WebSocket 연결 실패: %w", err)
 	}
 	defer conn.Close()
-	logger.Infof("[Binance UserStream] 연결됨: %s", wsURL)
+	logger.Infof("[Binance UserStream] 연결됨: %s<listenKey>", futuresStreamBase) // listenKey 는 계정 private 스트림 접근 키 — 로그 금지
 
 	// 3. keepalive goroutine (30분마다 PUT /fapi/v1/listenKey)
 	keepCtx, keepCancel := context.WithCancel(ctx)
